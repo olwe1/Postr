@@ -1,0 +1,24 @@
+{
+  "originHash" : "ea8d458e28150be92f60881ef69c216b3a2380eb2b2110485548f7574154668c",
+  "pins" : [
+    {
+      "identity" : "launchatlogin-modern",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/sindresorhus/LaunchAtLogin-Modern",
+      "state" : {
+        "branch" : "main",
+        "revision" : "a04ec1c363be3627734f6dad757d82f5d4fa8fcc"
+      }
+    },
+    {
+      "identity" : "nostr-sdk-swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/rust-nostr/nostr-sdk-swift",
+      "state" : {
+        "revision" : "42fe7d379b326583ae8282a5fd7232745f195906",
+        "version" : "0.44.0"
+      }
+    }
+  ],
+  "version" : 3
+}
