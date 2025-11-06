@@ -1,6 +1,8 @@
 # Postr
 
-A minimal macOS client to publish notes to Nostr.
+A minimal macOS client to publish notes to Nostr 🟣
+
+<img width="392" height="281" alt="preview" src="https://github.com/user-attachments/assets/060de4de-4250-41e8-9f0d-9e16c26cef92" />
 
 ## Usage
 - Download/build the app and launch it.
