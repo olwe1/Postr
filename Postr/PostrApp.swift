@@ -69,7 +69,8 @@ final class MenuBarController: NSObject {
             .environmentObject(alertState)
             .environmentObject(sessionService)
             .frame(width: 320)
-            .padding()
+            .padding(.vertical, 10)
+            .padding(.horizontal, 16)
         return NSHostingController(rootView: content)
     }
     

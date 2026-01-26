@@ -9,7 +9,7 @@ struct PostingView: View {
     @State private var showDonatePopover = false
 
     var body: some View {
-        Group {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text("Note:")
                     .font(.headline)
@@ -19,7 +19,7 @@ struct PostingView: View {
                 AlertView()
             }
             TextEditor(text: $note.text)
-                .frame(height: 80)
+                .frame(height: 120)
                 .overlay(
                     RoundedRectangle(cornerRadius: 6)
                         .stroke(Color.gray.opacity(0.3))
@@ -58,6 +58,7 @@ struct PostingView: View {
                     DonateView()
                 }
             }
+            .padding(.vertical, 6)
         }
         .onChange(of: showDonatePopover) { newValue in
             if newValue == false {

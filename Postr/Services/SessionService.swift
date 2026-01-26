@@ -13,6 +13,8 @@ class SessionService: ObservableObject {
     @Published var profileName: String = ""
     @Published var profileImageURL: String = ""
     @Published var profileImageData: Data?
+    @Published var profileBannerURL: String = ""
+    @Published var profileBannerData: Data?
     private let profileCacheKey = "profileCache"
 
     struct ProfileCache: Codable {
@@ -20,6 +22,8 @@ class SessionService: ObservableObject {
         let profileName: String
         let profileImageURL: String
         let profileImageData: Data?
+        let profileBannerURL: String
+        let profileBannerData: Data?
         let lastUpdated: Date
     }
 
@@ -51,6 +55,8 @@ class SessionService: ObservableObject {
         self.profileName = ""
         self.profileImageURL = ""
         self.profileImageData = nil
+        self.profileBannerURL = ""
+        self.profileBannerData = nil
         clearProfileCache()
     }
 
@@ -122,10 +128,12 @@ class SessionService: ObservableObject {
                     let dict = try? JSONSerialization.jsonObject(with: data)
                         as? [String: String]
                 {
-                    self.profileName = dict["display_name"] ?? ""
+                    self.profileName = dict["display_name"] ?? dict["name"] ?? ""
                     self.profileImageURL = dict["picture"] ?? ""
+                    self.profileBannerURL = dict["banner"] ?? ""
                     self.saveProfileToCache()
                     if dict["picture"] != nil { self.downloadProfileImage() }
+                    if dict["banner"] != nil { self.downloadProfileBanner() }
                 }
             }
         } catch {
@@ -136,11 +144,26 @@ class SessionService: ObservableObject {
     }
 
     func downloadProfileImage() {
-        guard let url = URL(string: profileImageURL), !profileImageURL.isEmpty
+        downloadProfileData(from: profileImageURL) { data in
+            self.profileImageData = data
+        }
+    }
+
+    func downloadProfileBanner() {
+        downloadProfileData(from: profileBannerURL) { data in
+            self.profileBannerData = data
+        }
+    }
+
+    private func downloadProfileData(
+        from urlString: String,
+        completion: @escaping (Data?) -> Void
+    ) {
+        guard let url = URL(string: urlString), !urlString.isEmpty
         else { return }
         let task = URLSession.shared.dataTask(with: url) { data, _, _ in
             DispatchQueue.main.async {
-                self.profileImageData = data
+                completion(data)
                 self.saveProfileToCache()
             }
         }
@@ -153,6 +176,8 @@ class SessionService: ObservableObject {
             profileName: self.profileName,
             profileImageURL: self.profileImageURL,
             profileImageData: self.profileImageData,
+            profileBannerURL: self.profileBannerURL,
+            profileBannerData: self.profileBannerData,
             lastUpdated: Date()
         )
         do {
@@ -175,6 +200,8 @@ class SessionService: ObservableObject {
             self.profileName = cache.profileName
             self.profileImageURL = cache.profileImageURL
             self.profileImageData = cache.profileImageData
+            self.profileBannerURL = cache.profileBannerURL
+            self.profileBannerData = cache.profileBannerData
         } catch {
             os_log(
                 "Failed to decode profile cache: %{public}@",

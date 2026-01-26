@@ -5,7 +5,7 @@ struct ContentView: View {
     @EnvironmentObject var session: SessionService
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 0) {
             HeaderView(
                 onLogout: {
                     session.deleteSession()
