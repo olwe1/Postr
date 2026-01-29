@@ -35,6 +35,15 @@ class SessionService: ObservableObject {
         !nsec.isEmpty && nsecSaved
     }
 
+    func isValidNsec(_ value: String) -> Bool {
+        do {
+            _ = try SecretKey.parse(secretKey: value)
+            return true
+        } catch {
+            return false
+        }
+    }
+
     func loadFromKeychain() {
         if let saved = KeychainHelper.get() {
             self.nsec = saved
