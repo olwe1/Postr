@@ -1,12 +1,26 @@
-import NostrSDK
 import SwiftUI
 
 struct PostingView: View {
     @EnvironmentObject var session: SessionService
     @EnvironmentObject var alertState: AlertState
+    @EnvironmentObject var uploadVM: UploadViewModel
     @StateObject private var note = DraftViewModel(storageKey: "draft_note")
     @StateObject private var vm = PostingViewModel()
     @State private var showDonatePopover = false
+
+    private var isProcessing: Bool {
+        vm.isPosting || uploadVM.isUploading
+    }
+
+    private var buttonText: String {
+        if uploadVM.isUploading {
+            return "Uploading…"
+        } else if vm.isPosting {
+            return "Posting…"
+        } else {
+            return "Post"
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -26,19 +40,21 @@ struct PostingView: View {
                 )
 
             HStack {
+                UploadProgressView(
+                    progress: uploadVM.uploadProgress,
+                    isUploading: uploadVM.isUploading,
+                    onSelect: { selectAndUploadFiles() }
+                )
+
                 Spacer()
 
-                Button(action: {
-                    vm.post(noteText: note.text, session: session, alerts: alertState) {
-                        note.clear()
-                    }
-                }) {
+                Button(action: performPost) {
                     HStack {
                         Image(systemName: "paperplane.fill")
-                        Text(vm.isPosting ? "Posting…" : "Post")
+                        Text(buttonText)
                     }
                 }
-                .disabled(!vm.canPost(noteText: note.text))
+                .disabled(!canPost)
                 .buttonStyle(.borderedProminent)
                 .tint(.accentColor)
                 .onHover { hovering in
@@ -67,6 +83,42 @@ struct PostingView: View {
         }
         .onDisappear {
             note.saveNow()
+        }
+    }
+
+    private var canPost: Bool {
+        !isProcessing && vm.canPost(noteText: note.text)
+    }
+
+    private func selectAndUploadFiles() {
+        uploadVM.selectAndUploadFiles(
+            servers: session.blossomServers,
+            nsec: session.nsec,
+            uploadToAll: session.uploadToAllServers,
+            onURLReady: { url in
+                if !note.text.isEmpty && !note.text.hasSuffix("\n") {
+                    note.text += "\n"
+                }
+                note.text += url
+            },
+            onError: { message in
+                alertState.show(message, severity: .error)
+            }
+        )
+    }
+
+    private func performPost() {
+        let finalNote = note.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let imetaTags = uploadVM.generateImetaTags()
+
+        vm.post(
+            noteText: finalNote,
+            imetaTags: imetaTags,
+            session: session,
+            alerts: alertState
+        ) {
+            note.clear()
+            uploadVM.clearAll()
         }
     }
 }

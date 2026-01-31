@@ -4,9 +4,10 @@ struct HeaderView: View {
     @EnvironmentObject var session: SessionService
     @State private var showRelaySheet = false
     @State private var relayDraft = ""
+    @State private var blossomServersDraft: [String] = []
+    @State private var uploadToAllServersDraft: Bool = true
     let onLogout: () -> Void
     let avatarSize: CGFloat = 44
-    private let bannerBleed: CGFloat = 16
 
     var body: some View {
         if session.isLoggedIn {
@@ -23,7 +24,7 @@ struct HeaderView: View {
                         .padding(.horizontal, session.profileBannerData == nil ? 0 : -16)
                         .padding(.top, session.profileBannerData == nil ? 0 : -16)
                 }
-                
+
                 HStack {
                     if let data = session.profileImageData,
                         let uiimg = NSImage(data: data),
@@ -52,15 +53,15 @@ struct HeaderView: View {
                                     .foregroundColor(.secondary)
                             )
                     }
-                    
+
                     if !session.profileName.isEmpty {
                         Text(session.profileName)
                             .font(.system(size: 20, weight: .medium, design: .rounded))
                             .tracking(0.2)
                     }
-                    
+
                     Spacer()
-                    
+
                     if session.nsecSaved {
                         Button("Log Out", action: onLogout)
                             .buttonStyle(.bordered)
@@ -70,7 +71,7 @@ struct HeaderView: View {
                                 hovering ? NSCursor.pointingHand.push() : NSCursor.pop()
                             }
                     }
-                    
+
                     Button(action: onSettings) {
                         Image(systemName: "gearshape")
                             .imageScale(.large)
@@ -87,8 +88,15 @@ struct HeaderView: View {
             .sheet(isPresented: $showRelaySheet) {
                 SettingsView(
                     relays: $relayDraft,
+                    blossomServers: $blossomServersDraft,
+                    uploadToAllServers: $uploadToAllServersDraft,
                     onSave: {
                         session.relays = relayDraft
+                        session.blossomServers = blossomServersDraft
+                        session.uploadToAllServers = uploadToAllServersDraft
+                        Task {
+                            try? await session.publishBlossomServers()
+                        }
                         showRelaySheet = false
                     },
                     onCancel: {
@@ -101,6 +109,8 @@ struct HeaderView: View {
 
     func onSettings() {
         relayDraft = session.relays
+        blossomServersDraft = session.blossomServers
+        uploadToAllServersDraft = session.uploadToAllServers
         showRelaySheet = true
     }
 }

@@ -6,15 +6,17 @@ import LaunchAtLogin
 final class MenuBarController: NSObject {
     private let alertState: AlertState
     private let sessionService: SessionService
+    private let uploadViewModel: UploadViewModel
     
     private let statusItem: NSStatusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let popover: NSPopover = NSPopover()
     private let menu: NSMenu = NSMenu()
     private var launchAtLoginMenuItem: NSMenuItem?
     
-    init(alertState: AlertState, sessionService: SessionService) {
+    init(alertState: AlertState, sessionService: SessionService, uploadViewModel: UploadViewModel) {
         self.alertState = alertState
         self.sessionService = sessionService
+        self.uploadViewModel = uploadViewModel
         super.init()
         setupStatusItem()
         setupPopover()
@@ -38,7 +40,7 @@ final class MenuBarController: NSObject {
     }
     
     private func setupPopover() {
-        popover.behavior = .transient
+        popover.behavior = .applicationDefined
         popover.contentSize = NSSize(width: 340, height: 420)
         popover.contentViewController = buildContentViewController()
     }
@@ -68,6 +70,7 @@ final class MenuBarController: NSObject {
         let content = ContentView()
             .environmentObject(alertState)
             .environmentObject(sessionService)
+            .environmentObject(uploadViewModel)
             .frame(width: 320)
             .padding(.vertical, 10)
             .padding(.horizontal, 16)
@@ -106,14 +109,16 @@ final class MenuBarController: NSObject {
     }
 }
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let alertState = AlertState()
     let sessionService = SessionService()
+    let uploadViewModel = UploadViewModel()
     
     private var menuBarController: MenuBarController!
     
     func applicationDidFinishLaunching(_ notification: Notification) {
-        menuBarController = MenuBarController(alertState: alertState, sessionService: sessionService)
+        menuBarController = MenuBarController(alertState: alertState, sessionService: sessionService, uploadViewModel: uploadViewModel)
     }
 }
 

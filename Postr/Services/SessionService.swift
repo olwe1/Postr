@@ -15,7 +15,10 @@ class SessionService: ObservableObject {
     @Published var profileImageData: Data?
     @Published var profileBannerURL: String = ""
     @Published var profileBannerData: Data?
+    @Published var blossomServers: [String] = ["https://blossom.primal.net"]
+    @Published var uploadToAllServers: Bool = true
     private let profileCacheKey = "profileCache"
+    private let blossomCacheKey = "blossomSettings"
 
     struct ProfileCache: Codable {
         let relays: String
@@ -27,8 +30,14 @@ class SessionService: ObservableObject {
         let lastUpdated: Date
     }
 
+    struct BlossomCache: Codable {
+        let servers: [String]
+        let uploadToAll: Bool
+    }
+
     init() {
         loadFromKeychain()
+        loadBlossomFromCache()
     }
 
     var isLoggedIn: Bool {
@@ -51,11 +60,6 @@ class SessionService: ObservableObject {
         }
     }
 
-    func saveToKeychain() {
-        _ = KeychainHelper.save(value: nsec)
-        nsecSaved = true
-    }
-
     func deleteSession() {
         KeychainHelper.delete()
         self.nsec = ""
@@ -66,7 +70,10 @@ class SessionService: ObservableObject {
         self.profileImageData = nil
         self.profileBannerURL = ""
         self.profileBannerData = nil
+        self.blossomServers = ["https://blossom.primal.net"]
+        self.uploadToAllServers = true
         clearProfileCache()
+        clearBlossomCache()
     }
 
     @MainActor
@@ -149,6 +156,7 @@ class SessionService: ObservableObject {
             print("Error fetching metadata: \(error.localizedDescription)")
         }
 
+        await fetchBlossomServers()
         await client?.disconnect()
     }
 
@@ -221,5 +229,75 @@ class SessionService: ObservableObject {
 
     func clearProfileCache() {
         UserDefaults.standard.removeObject(forKey: profileCacheKey)
+    }
+
+    @MainActor
+    func fetchBlossomServers() async {
+        guard let pubKey = pubKey, let client = client else { return }
+
+        let filter = Filter()
+            .author(author: pubKey)
+            .kind(kind: Kind(kind: 10063))
+
+        do {
+            let events = try await client.fetchEvents(filter: filter, timeout: 10)
+            let eventsArray = try events.toVec()
+
+            if let latestEvent = eventsArray.max(by: {
+                $0.createdAt().asSecs() < $1.createdAt().asSecs()
+            }) {
+                let servers = latestEvent.tags().toVec().compactMap { tag in
+                    let vec = tag.asVec()
+                    return (vec.count > 1 && vec[0] == "server") ? vec[1] : nil
+                }
+                if !servers.isEmpty {
+                    self.blossomServers = servers
+                    saveBlossomToCache()
+                }
+            }
+        } catch {
+            print("Error fetching blossom servers: \(error)")
+        }
+    }
+
+    func publishBlossomServers() async throws {
+        guard !nsec.isEmpty, let client = client else { return }
+
+        let secretKey = try SecretKey.parse(secretKey: nsec)
+        let keys = Keys(secretKey: secretKey)
+
+        let tags: [Tag] = try blossomServers.map { server in
+            try Tag.parse(data: ["server", server])
+        }
+        let builder = EventBuilder(kind: Kind(kind: 10063), content: "")
+            .tags(tags: tags)
+
+        let event = try builder.signWithKeys(keys: keys)
+
+        await client.connect()
+        await client.waitForConnection(timeout: 15)
+        _ = try await client.sendEvent(event: event)
+        await client.disconnect()
+
+        saveBlossomToCache()
+    }
+
+    func saveBlossomToCache() {
+        let cache = BlossomCache(servers: blossomServers, uploadToAll: uploadToAllServers)
+        if let data = try? JSONEncoder().encode(cache) {
+            UserDefaults.standard.set(data, forKey: blossomCacheKey)
+        }
+    }
+
+    func loadBlossomFromCache() {
+        guard let data = UserDefaults.standard.data(forKey: blossomCacheKey),
+            let cache = try? JSONDecoder().decode(BlossomCache.self, from: data)
+        else { return }
+        self.blossomServers = cache.servers
+        self.uploadToAllServers = cache.uploadToAll
+    }
+
+    func clearBlossomCache() {
+        UserDefaults.standard.removeObject(forKey: blossomCacheKey)
     }
 }
