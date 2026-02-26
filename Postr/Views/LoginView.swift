@@ -1,14 +1,15 @@
 import SwiftUI
 
 struct LoginView: View {
-    @EnvironmentObject var session: SessionService
+    @EnvironmentObject var account: NostrAccount
     @EnvironmentObject var alertState: AlertState
+    @EnvironmentObject var profileService: ProfileService
 
-    private var isValidNsec: Bool { session.isValidNsec(session.nsec) }
+    private var isValidNsec: Bool { account.isValidNsec(account.nsec) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SecureField("Enter your private key…", text: $session.nsec)
+            SecureField("Enter your private key…", text: $account.nsec)
                 .textFieldStyle(.plain)
                 .padding(8)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -20,13 +21,11 @@ struct LoginView: View {
             HStack {
                 Spacer()
                 Button("Save Nsec") {
-                    if KeychainHelper.save(value: session.nsec) {
-                        session.nsecSaved = true
+                    if KeychainHelper.save(value: account.nsec) {
+                        account.nsecSaved = true
                         alertState.show("Nsec securely saved!", severity: .success)
-                        Task { @MainActor in
-                            await session.getClientSession()
-                            await session.fetchProfile()
-                        }
+                        account.resolvePublicKey()
+                        profileService.fetchProfile()
                     } else {
                         alertState.show("Failed to save nsec.", severity: .error)
                     }

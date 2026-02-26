@@ -1,17 +1,18 @@
 import SwiftUI
 
 struct ContentView: View {
-    @EnvironmentObject var session: SessionService
+    @EnvironmentObject var account: NostrAccount
+    @EnvironmentObject var profileService: ProfileService
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HeaderView(
                 onLogout: {
-                    session.deleteSession()
+                    account.deleteSession(profileService: profileService)
                 }
             )
 
-            if !session.isLoggedIn {
+            if !account.isLoggedIn {
                 LoginView()
             } else {
                 PostingView()
@@ -19,9 +20,9 @@ struct ContentView: View {
         }
         .frame(maxWidth: 350)
         .task {
-            session.loadProfileFromCache()
-            await session.getClientSession()
-            if session.isLoggedIn { await session.fetchProfile() }
+            profileService.loadFromCache()
+            account.resolvePublicKey()
+            if account.isLoggedIn { profileService.fetchProfile() }
         }
     }
 }

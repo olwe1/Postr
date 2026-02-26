@@ -1,6 +1,6 @@
 import Foundation
-import NostrSDK
 
+@MainActor
 final class PostingViewModel: ObservableObject {
     @Published var isPosting: Bool = false
 
@@ -11,7 +11,7 @@ final class PostingViewModel: ObservableObject {
     func post(
         noteText: String,
         imetaTags: [[String]] = [],
-        session: SessionService,
+        publishingService: PublishingService,
         alerts: AlertState,
         onSuccess: (() -> Void)? = nil
     ) {
@@ -21,29 +21,9 @@ final class PostingViewModel: ObservableObject {
 
         isPosting = true
 
-        Task { @MainActor in
+        Task {
             do {
-                guard let client = session.client else {
-                    throw URLError(.badServerResponse)
-                }
-
-                let secretKey = try SecretKey.parse(secretKey: session.nsec)
-                let keys = Keys(secretKey: secretKey)
-
-                var builder = EventBuilder.textNote(content: trimmed)
-                if !imetaTags.isEmpty {
-                    let tags: [Tag] = try imetaTags.map { try Tag.parse(data: $0) }
-                    builder = builder.tags(tags: tags)
-                }
-
-                let unsignedEvent = builder.build(publicKey: keys.publicKey())
-                let event = try unsignedEvent.signWithKeys(keys: keys)
-
-                await client.connect()
-                await client.waitForConnection(timeout: 15)
-                _ = try await client.sendEvent(event: event)
-                await client.disconnect()
-
+                try await publishingService.publishNote(text: trimmed, imetaTags: imetaTags)
                 alerts.show("Note posted successfully!", severity: .success)
                 onSuccess?()
             } catch {

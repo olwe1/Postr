@@ -7,6 +7,7 @@ struct SettingsView: View {
     @Binding var uploadToAllServers: Bool
     var onSave: () -> Void
     var onCancel: () -> Void
+    var onLogout: (() -> Void)? = nil
 
     @State private var newServerURL: String = ""
 
@@ -91,6 +92,12 @@ struct SettingsView: View {
             Spacer()
 
             HStack {
+                if let onLogout {
+                    Button("Log Out") { onLogout() }
+                        .buttonStyle(.bordered)
+                        .font(.caption)
+                        .foregroundColor(.red)
+                }
                 Spacer()
                 Button("Cancel") { onCancel() }
                     .keyboardShortcut(.cancelAction)

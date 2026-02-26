@@ -1,9 +1,10 @@
 import SwiftUI
 
 struct PostingView: View {
-    @EnvironmentObject var session: SessionService
+    @EnvironmentObject var account: NostrAccount
     @EnvironmentObject var alertState: AlertState
     @EnvironmentObject var uploadVM: UploadViewModel
+    @EnvironmentObject var publishingService: PublishingService
     @StateObject private var note = DraftViewModel(storageKey: "draft_note")
     @StateObject private var vm = PostingViewModel()
     @State private var showDonatePopover = false
@@ -13,13 +14,9 @@ struct PostingView: View {
     }
 
     private var buttonText: String {
-        if uploadVM.isUploading {
-            return "Uploading…"
-        } else if vm.isPosting {
-            return "Posting…"
-        } else {
-            return "Post"
-        }
+        if uploadVM.isUploading { return "Uploading…" }
+        if vm.isPosting { return "Posting…" }
+        return "Post"
     }
 
     var body: some View {
@@ -27,11 +24,10 @@ struct PostingView: View {
             HStack {
                 Text("Note:")
                     .font(.headline)
-
                 Spacer()
-
                 AlertView()
             }
+
             TextEditor(text: $note.text)
                 .frame(height: 120)
                 .overlay(
@@ -57,9 +53,7 @@ struct PostingView: View {
                 .disabled(!canPost)
                 .buttonStyle(.borderedProminent)
                 .tint(.accentColor)
-                .onHover { hovering in
-                    hovering ? NSCursor.pointingHand.push() : NSCursor.pop()
-                }
+                .handCursor()
 
                 Spacer()
 
@@ -67,9 +61,7 @@ struct PostingView: View {
                     Text("⚡️")
                 }
                 .buttonStyle(.plain)
-                .onHover { hovering in
-                    hovering ? NSCursor.pointingHand.push() : NSCursor.pop()
-                }
+                .handCursor()
                 .popover(isPresented: $showDonatePopover) {
                     DonateView()
                 }
@@ -77,9 +69,7 @@ struct PostingView: View {
             .padding(.vertical, 6)
         }
         .onChange(of: showDonatePopover) { newValue in
-            if newValue == false {
-                NSApp.activate(ignoringOtherApps: true)
-            }
+            if newValue == false { NSApp.activate(ignoringOtherApps: true) }
         }
         .onDisappear {
             note.saveNow()
@@ -92,13 +82,11 @@ struct PostingView: View {
 
     private func selectAndUploadFiles() {
         uploadVM.selectAndUploadFiles(
-            servers: session.blossomServers,
-            nsec: session.nsec,
-            uploadToAll: session.uploadToAllServers,
+            servers: account.blossomServers,
+            nsec: account.nsec,
+            uploadToAll: account.uploadToAllServers,
             onURLReady: { url in
-                if !note.text.isEmpty && !note.text.hasSuffix("\n") {
-                    note.text += "\n"
-                }
+                if !note.text.isEmpty && !note.text.hasSuffix("\n") { note.text += "\n" }
                 note.text += url
             },
             onError: { message in
@@ -114,7 +102,7 @@ struct PostingView: View {
         vm.post(
             noteText: finalNote,
             imetaTags: imetaTags,
-            session: session,
+            publishingService: publishingService,
             alerts: alertState
         ) {
             note.clear()
