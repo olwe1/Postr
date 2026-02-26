@@ -2,23 +2,37 @@ import Foundation
 import NostrSDK
 
 final class NostrAccount: ObservableObject {
+    private static let defaultRelays: [String] = [
+        "wss://relay.nostr.band",
+        "wss://nos.lol",
+        "wss://relay.primal.net",
+    ]
+    private static let defaultBlossomServers: [String] = ["https://blossom.primal.net"]
+
     @Published var nsec: String = ""
     @Published var pubKey: PublicKey?
     @Published var nsecSaved: Bool = false
-    @Published var relays: String = "wss://relay.nostr.band,wss://nos.lol,wss://relay.primal.net"
-    @Published var blossomServers: [String] = ["https://blossom.primal.net"]
+    @Published var relays: [String] = defaultRelays
+    @Published var blossomServers: [String] = defaultBlossomServers
     @Published var uploadToAllServers: Bool = true
 
+    private var sharedClient: Client?
     private let blossomCacheKey = "blossomSettings"
+    private let relaysCacheKey = "relaysSettings"
 
     struct BlossomCache: Codable {
         let servers: [String]
         let uploadToAll: Bool
     }
 
+    struct RelaysCache: Codable {
+        let relays: [String]
+    }
+
     init() {
         loadFromKeychain()
         loadBlossomFromCache()
+        loadRelaysFromCache()
     }
 
     var isLoggedIn: Bool { !nsec.isEmpty && nsecSaved }
@@ -46,28 +60,77 @@ final class NostrAccount: ObservableObject {
 
     @MainActor
     func deleteSession(profileService: ProfileService) {
+        Task { await disconnectClient() }
         KeychainHelper.delete()
         self.nsec = ""
         self.nsecSaved = false
         self.pubKey = nil
-        self.blossomServers = ["https://blossom.primal.net"]
+        self.relays = Self.defaultRelays
+        self.blossomServers = Self.defaultBlossomServers
         self.uploadToAllServers = true
         clearBlossomCache()
+        clearRelaysCache()
         profileService.clearSession()
+    }
+
+    func connectClient() async {
+        guard sharedClient == nil else { return }
+        do {
+            let client = try await makeClient()
+            await client.connect()
+            await client.waitForConnection(timeout: 5)
+            sharedClient = client
+        } catch {
+            print("NostrAccount: connectClient failed: \(error)")
+        }
+    }
+
+    func disconnectClient() async {
+        if let client = sharedClient {
+            await client.disconnect()
+            sharedClient = nil
+        }
+    }
+
+    func ensureConnected() async throws -> Client {
+        if let client = sharedClient {
+            return client
+        }
+        let client = try await makeClient()
+        await client.connect()
+        await client.waitForConnection(timeout: 5)
+        sharedClient = client
+        return client
     }
 
     func makeClient() async throws -> Client {
         let client = Client()
-        let relayURLs =
-            relays
-            .split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        for relay in relayURLs {
+        for relay in relays where !relay.isEmpty {
             let relayURL = try RelayUrl.parse(url: relay)
             _ = try await client.addRelay(url: relayURL)
         }
         return client
+    }
+
+    func sendAndVerify(builder: EventBuilder) async throws {
+        guard !nsec.isEmpty else { return }
+        let secretKey = try SecretKey.parse(secretKey: nsec)
+        let keys = Keys(secretKey: secretKey)
+        let event = try builder.signWithKeys(keys: keys)
+
+        let client = try await ensureConnected()
+        let output = try await client.sendEvent(event: event)
+
+        guard !output.success.isEmpty else {
+            let reasons = output.failed.values.joined(separator: ", ")
+            throw NSError(
+                domain: "NostrPublish", code: 1,
+                userInfo: [
+                    NSLocalizedDescriptionKey: reasons.isEmpty
+                        ? "No relay accepted the event." : reasons
+                ]
+            )
+        }
     }
 
     func saveBlossomToCache() {
@@ -88,27 +151,18 @@ final class NostrAccount: ObservableObject {
         UserDefaultsCache.remove(key: blossomCacheKey)
     }
 
-    func sendAndVerify(builder: EventBuilder) async throws {
-        guard !nsec.isEmpty else { return }
-        let secretKey = try SecretKey.parse(secretKey: nsec)
-        let keys = Keys(secretKey: secretKey)
-        let event = try builder.signWithKeys(keys: keys)
+    func saveRelaysToCache() {
+        UserDefaultsCache.save(RelaysCache(relays: relays), key: relaysCacheKey)
+    }
 
-        let client = try await makeClient()
-        await client.connect()
-        await client.waitForConnection(timeout: 15)
-        let output = try await client.sendEvent(event: event)
-        await client.disconnect()
-
-        guard !output.success.isEmpty else {
-            let reasons = output.failed.values.joined(separator: ", ")
-            throw NSError(
-                domain: "NostrPublish", code: 1,
-                userInfo: [
-                    NSLocalizedDescriptionKey: reasons.isEmpty
-                        ? "No relay accepted the event." : reasons
-                ]
-            )
+    func loadRelaysFromCache() {
+        guard let cache = UserDefaultsCache.load(RelaysCache.self, key: relaysCacheKey) else {
+            return
         }
+        self.relays = cache.relays
+    }
+
+    func clearRelaysCache() {
+        UserDefaultsCache.remove(key: relaysCacheKey)
     }
 }

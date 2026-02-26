@@ -46,9 +46,7 @@ final class ProfileService: ObservableObject {
     private func runFetch() async {
         guard !account.nsec.isEmpty, let pubKey = account.pubKey else { return }
         do {
-            let client = try await account.makeClient()
-            await client.connect()
-            defer { Task { await client.disconnect() } }
+            let client = try await account.ensureConnected()
 
             guard !Task.isCancelled else { return }
 
@@ -56,8 +54,9 @@ final class ProfileService: ObservableObject {
 
             guard !Task.isCancelled else { return }
 
-            if let relays = data.relays {
+            if let relays = data.relays, !relays.isEmpty {
                 account.relays = relays
+                account.saveRelaysToCache()
             }
             if !data.name.isNilOrEmpty {
                 profileName = data.name!
@@ -115,12 +114,14 @@ final class ProfileService: ObservableObject {
         fetchTask?.cancel()
         fetchTask = nil
         do {
+            let client = try await account.ensureConnected()
             try await publisher.publishName(
                 name,
                 nameField: nameField,
                 nameAlt: nameAlt,
                 cachedRawMetadataJSON: rawMetadataJSON,
                 pubKey: pubKey,
+                client: client,
                 account: account
             )
             saveToCache()
@@ -133,7 +134,6 @@ final class ProfileService: ObservableObject {
     func saveToCache() {
         UserDefaultsCache.save(
             Cache(
-                relays: account.relays,
                 profileName: profileName,
                 profileImageURL: profileImageURL,
                 profileImageData: profileImageData,
@@ -149,7 +149,6 @@ final class ProfileService: ObservableObject {
 
     func loadFromCache() {
         guard let cache = UserDefaultsCache.load(Cache.self, key: cacheKey) else { return }
-        account.relays = cache.relays
         profileName = cache.profileName
         profileImageURL = cache.profileImageURL
         profileImageData = cache.profileImageData
@@ -166,7 +165,6 @@ final class ProfileService: ObservableObject {
 
 extension ProfileService {
     struct Cache: Codable {
-        let relays: String
         let profileName: String
         let profileImageURL: String
         let profileImageData: Data?
@@ -177,13 +175,12 @@ extension ProfileService {
         let lastUpdated: Date
 
         init(
-            relays: String, profileName: String,
+            profileName: String,
             profileImageURL: String, profileImageData: Data?,
             profileBannerURL: String, profileBannerData: Data?,
             profileStatus: String, rawMetadataJSON: String,
             lastUpdated: Date
         ) {
-            self.relays = relays
             self.profileName = profileName
             self.profileImageURL = profileImageURL
             self.profileImageData = profileImageData
@@ -196,15 +193,14 @@ extension ProfileService {
 
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
-            relays = try c.decode(String.self, forKey: .relays)
-            profileName = try c.decode(String.self, forKey: .profileName)
-            profileImageURL = try c.decode(String.self, forKey: .profileImageURL)
+            profileName = try c.decodeIfPresent(String.self, forKey: .profileName) ?? ""
+            profileImageURL = try c.decodeIfPresent(String.self, forKey: .profileImageURL) ?? ""
             profileImageData = try c.decodeIfPresent(Data.self, forKey: .profileImageData)
-            profileBannerURL = try c.decode(String.self, forKey: .profileBannerURL)
+            profileBannerURL = try c.decodeIfPresent(String.self, forKey: .profileBannerURL) ?? ""
             profileBannerData = try c.decodeIfPresent(Data.self, forKey: .profileBannerData)
             profileStatus = try c.decodeIfPresent(String.self, forKey: .profileStatus) ?? ""
             rawMetadataJSON = try c.decodeIfPresent(String.self, forKey: .rawMetadataJSON) ?? ""
-            lastUpdated = try c.decode(Date.self, forKey: .lastUpdated)
+            lastUpdated = try c.decodeIfPresent(Date.self, forKey: .lastUpdated) ?? Date()
         }
     }
 }

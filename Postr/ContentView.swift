@@ -22,7 +22,10 @@ struct ContentView: View {
         .task {
             profileService.loadFromCache()
             account.resolvePublicKey()
-            if account.isLoggedIn { profileService.fetchProfile() }
+            if account.isLoggedIn {
+                await account.connectClient()
+                profileService.fetchProfile()
+            }
         }
     }
 }

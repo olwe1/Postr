@@ -5,7 +5,7 @@ struct HeaderView: View {
     @EnvironmentObject var profileService: ProfileService
     @EnvironmentObject var alertState: AlertState
     @State private var showRelaySheet = false
-    @State private var relayDraft = ""
+    @State private var relayDraft: [String] = []
     @State private var blossomServersDraft: [String] = []
     @State private var uploadToAllServersDraft: Bool = true
     @State private var isEditingStatus = false
@@ -145,6 +145,7 @@ struct HeaderView: View {
                     uploadToAllServers: $uploadToAllServersDraft,
                     onSave: {
                         account.relays = relayDraft
+                        account.saveRelaysToCache()
                         account.blossomServers = blossomServersDraft
                         account.uploadToAllServers = uploadToAllServersDraft
                         Task { try? await PublishingService(account: account).publishBlossomServers() }

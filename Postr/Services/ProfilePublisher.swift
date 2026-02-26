@@ -14,12 +14,9 @@ struct ProfilePublisher {
         nameAlt: String,
         cachedRawMetadataJSON: String,
         pubKey: PublicKey,
+        client: Client,
         account: NostrAccount
     ) async throws {
-        let client = try await account.makeClient()
-        await client.connect()
-        defer { Task { await client.disconnect() } }
-
         let baseJSON: String
         if let meta = try? await ProfileFetcher().fetchMetadata(pubKey: pubKey, client: client) {
             baseJSON = meta.rawMetadataJSON
